@@ -1,11 +1,14 @@
 'use client';
 
-import { getServerSession } from "next-auth";
-import { authOptions } from "../lib/auth";
+import { getSession } from "next-auth/react";
 import { siteConfig } from "../config/site";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+
+// 🧩 Make sure these are imported correctly
+import ObservationCard from './ObservationCard'; // Adjust path if needed
+import ObservationListItem from './ObservationListItem'; // Adjust path if needed
 
 interface Observation {
   id: string;
@@ -25,24 +28,40 @@ interface Observation {
   }[];
 }
 
-async function fetchObservations() {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/observations`);
-  if (!response.ok) {
-    throw new Error('Failed to fetch observations');
-  }
-  return response.json();
-}
+export default function ObservationsPage() {
+  const router = useRouter();
 
-export default async function ObservationsPage() {
-  const session = await getServerSession(authOptions);
-  
-  if (!session) {
-    redirect('/auth/signin');
-  }
-
-  const observations: Observation[] = await fetchObservations();
-
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const session = await getSession();
+
+      if (!session) {
+        router.push('/auth/signin');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/observations`);
+        if (!response.ok) throw new Error('Failed to fetch observations');
+        const data = await response.json();
+        setObservations(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [router]);
+
+  if (loading) {
+    return <div className="p-8 text-gray-500">Loading observations...</div>;
+  }
 
   return (
     <div className="min-h-screen p-8 bg-gray-50">
@@ -88,7 +107,11 @@ export default async function ObservationsPage() {
           </div>
         </div>
 
-        {viewMode === 'cards' ? (
+        {observations.length === 0 ? (
+          <div className="text-center text-gray-500 mt-8">
+            No observations found.
+          </div>
+        ) : viewMode === 'cards' ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {observations.map((observation) => (
               <ObservationCard key={observation.id} observation={observation} />
@@ -101,13 +124,7 @@ export default async function ObservationsPage() {
             ))}
           </div>
         )}
-
-        {observations.length === 0 && (
-          <div className="text-center text-gray-500 mt-8">
-            No observations found.
-          </div>
-        )}
       </div>
     </div>
   );
-} 
+}
